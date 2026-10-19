@@ -6,7 +6,6 @@ this sample, whatever company is typed in, so that no made-up facts are attached
 from __future__ import annotations
 
 from research.models import Brief, Claim, Evidence, Research, SourceInfo
-from research.prompts import SECTION_HEADINGS
 
 SOURCES = [
     SourceInfo("S1", "https://harbourline.example/about", "About us - Harbourline Facades", "2025-06"),
@@ -47,21 +46,28 @@ def sample(brief: Brief) -> tuple[Brief, Research, dict]:
         queries=["Harbourline Facades Ltd Leeds", "Harbourline Facades company registry",
                  "harbourline.example", "Harbourline Facades news 2026"],
     )
-    h = SECTION_HEADINGS[brief.language]
-    bullet = lambda text, *ids: {"text": text, "claim_ids": list(ids)}  # noqa: E731
+    fact = lambda text, *ids: {"text": text, "claim_ids": list(ids)}  # noqa: E731
     draft = {
-        "summary": [bullet("An active UK company, incorporated in 2014, that designs and installs cladding and curtain walling.", "C1", "C2", "C5"),
-                    bullet("It opened a second fabrication site in 2026.", "C8")],
+        "summary": [fact("Active UK cladding and curtain-walling contractor, incorporated 2014; opened a second "
+                         "fabrication site in 2026.", "C1", "C2", "C5", "C8")],
         "confidence": "high",
         "confidence_reason": "The registry record matches the name, and the contact's email domain matches the company website.",
-        "sections": [
-            {"heading": h[0], "bullets": [bullet(c[1], c[0]) for c in CLAIMS[:4]]},
-            {"heading": h[1], "bullets": [bullet(CLAIMS[4][1], "C5"), bullet(CLAIMS[5][1], "C6")]},
-            {"heading": h[2], "bullets": [bullet("Based in Leeds and works mainly in the North of England.", "C3", "C7")]},
-            {"heading": h[3], "bullets": [bullet(CLAIMS[7][1], "C8"), bullet(CLAIMS[9][1], "C10")]},
-            {"heading": h[4], "bullets": []},
-        ],
-        "unverified": [{"claim_id": "C9", "reason": "The directory lists 50-99 employees, not around 120."}],
+        "key_facts": {
+            "what_they_do": fact("Designs, fabricates and installs rainscreen cladding and curtain walling", "C5"),
+            "business_type": fact("Fabricator and installer (contractor)", "C5"),
+            "location": fact("Registered office in Leeds; works mainly in the North of England", "C3", "C7"),
+            "registration": fact("Private limited company, incorporated 12 May 2014, status active", "C1", "C2"),
+            "customers": fact("Commercial building projects", "C5"),
+            "size": fact(""),
+            "identity_check": fact("Website domain matches the contact's email domain", "C4"),
+        },
+        "products": [{"category": "Cladding", "text": "Aluminium composite panels (ACM)", "claim_ids": ["C6"]},
+                     {"category": "Curtain walling", "text": "Unitised and stick curtain wall systems", "claim_ids": ["C6"]}],
+        "recent": [{"date": "2026", "text": "Opened a second fabrication site", "claim_ids": ["C8"]},
+                   {"date": "", "text": "Completed an office refurbishment in Manchester", "claim_ids": ["C10"]}],
+        "risks": [],
+        "unverified": [{"claim_id": "C9", "reason": "The directory lists 50-99 employees, not around 120.",
+                        "other_company": False}],
         "gaps": ["No turnover or filed accounts appeared in the search results.",
                  "No information on who currently supplies their composite panels."],
         "next_steps": ["Ask about annual panel volume and their current supplier.",

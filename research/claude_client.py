@@ -3,41 +3,64 @@ from __future__ import annotations
 
 import json
 import re
+from bisect import bisect_right
+from datetime import date, timedelta
 
 import anthropic
 
 from research import prompts
 from research.config import FALLBACK_MODELS, Config
 from research.models import Brief, Claim, Evidence, Research, SourceInfo, Usage
+from research.pipeline import KEY_FACTS
 
 WEB_SEARCH_TOOL = "web_search_20250305"
+BLOCKED_DOMAINS = ["linkedin.com/in"]  # personal profile pages: research the company, not the person
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CONTINUATIONS = 4  # how many times a paused research turn is resumed
 
-_bullet = {"type": "object", "additionalProperties": False, "required": ["text", "claim_ids"],
-           "properties": {"text": {"type": "string"}, "claim_ids": {"type": "array", "items": {"type": "string"}}}}
-_strings = {"type": "array", "items": {"type": "string"}}
-DRAFT_SCHEMA = {
-    "type": "object", "additionalProperties": False,
-    "required": ["summary", "confidence", "confidence_reason", "sections", "unverified", "gaps", "next_steps", "source_types"],
-    "properties": {
-        "summary": {"type": "array", "items": _bullet},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "confidence_reason": {"type": "string"},
-        "sections": {"type": "array", "items": {
-            "type": "object", "additionalProperties": False, "required": ["heading", "bullets"],
-            "properties": {"heading": {"type": "string"}, "bullets": {"type": "array", "items": _bullet}}}},
-        "unverified": {"type": "array", "items": {
-            "type": "object", "additionalProperties": False, "required": ["claim_id", "reason"],
-            "properties": {"claim_id": {"type": "string"}, "reason": {"type": "string"}}}},
-        "gaps": _strings,
-        "next_steps": _strings,
-        "source_types": {"type": "array", "items": {
-            "type": "object", "additionalProperties": False, "required": ["source_id", "type"],
-            "properties": {"source_id": {"type": "string"},
-                           "type": {"type": "string", "enum": ["official", "company", "third_party"]}}}},
-    },
-}
+
+def _obj(**props) -> dict:
+    return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
+
+
+def _list(item: dict) -> dict:
+    return {"type": "array", "items": item}
+
+
+def _enum(*values: str) -> dict:
+    return {"type": "string", "enum": list(values)}
+
+
+# Kept flat on purpose: nested objects make the structured-output grammar too large for the API.
+_str = {"type": "string"}
+DRAFT_SCHEMA = _obj(
+    summary=_list(_obj(text=_str, claim_ids=_list(_str))),
+    confidence=_enum("high", "medium", "low"),
+    confidence_reason=_str,
+    entries=_list(_obj(section=_enum("key_fact", "product", "recent", "risk"), label=_str, text=_str,
+                       claim_ids=_list(_str))),
+    unverified=_list(_obj(claim_id=_str, reason=_str, other_company={"type": "boolean"})),
+    gaps=_list(_str),
+    next_steps=_list(_str),
+    source_types=_list(_obj(source_id=_str, type=_enum("official", "company", "third_party"))),
+)
+
+
+def draft_from_entries(data: dict) -> dict:
+    """Sort the flat `entries` rows into the key facts and tables that build_report expects."""
+    draft = {k: v for k, v in data.items() if k != "entries"}
+    draft.update(key_facts={}, products=[], recent=[], risks=[])
+    for e in data.get("entries", []):
+        row, section, label = {"text": e.get("text", ""), "claim_ids": e.get("claim_ids", [])}, e.get("section"), e.get("label", "")
+        if section == "key_fact" and label in KEY_FACTS:
+            draft["key_facts"].setdefault(label, row)
+        elif section == "product":
+            draft["products"].append({**row, "category": label})
+        elif section == "recent":
+            draft["recent"].append({**row, "date": label})
+        elif section == "risk":
+            draft["risks"].append(row)
+    return draft
 
 
 class ResearchError(Exception):
@@ -58,7 +81,8 @@ class ClaudeClient:
             messages = [request] + ([{"role": "assistant", "content": list(blocks)}] if blocks else [])
             response = self._create(
                 max_tokens=16000, system=prompts.RESEARCH_SYSTEM, messages=messages,
-                tools=[{"type": WEB_SEARCH_TOOL, "name": "web_search", "max_uses": self.cfg.max_searches}])
+                tools=[{"type": WEB_SEARCH_TOOL, "name": "web_search", "max_uses": self.cfg.max_searches,
+                        "blocked_domains": BLOCKED_DOMAINS}])
             blocks.extend(response.content)
             if response.stop_reason != "pause_turn":
                 break
@@ -74,7 +98,7 @@ class ClaudeClient:
             output_config={"format": {"type": "json_schema", "schema": DRAFT_SCHEMA}})
         text = next((b.text for b in response.content if b.type == "text"), "")
         try:
-            return json.loads(text)
+            return draft_from_entries(json.loads(text))
         except json.JSONDecodeError:
             raise ResearchError("The checking step returned an incomplete answer. Please try again.") from None
 
@@ -107,41 +131,76 @@ class ClaudeClient:
         return response
 
 
+SENTENCE_END = re.compile(r"(?<=[.!?。！？])[*_\"”')\]]*\s+|\n+")
+AGO = re.compile(r"(\d+)\s+(day|week|month|year)s?\s+ago", re.I)
+
+
 def parse_research(blocks: list) -> Research:
-    """Cited text blocks become claims; search results and citations become sources, deduped by URL."""
+    """Cited text becomes claims (one per sentence); search results and citations become sources, deduped by URL.
+
+    The API often cites part of a sentence ("incorporated in 2014"), so each claim is widened to the whole
+    sentence it sits in. Uncited sentences (introductions, commentary) are not claims.
+    """
     sources: dict[str, SourceInfo] = {}
-    claims: list[Claim] = []
     queries: list[str] = []
-    loose_text: list[str] = []
+    full = ""
+    cited: list[tuple[int, int, list[Evidence]]] = []
 
     def source_id(url: str, title: str | None, page_age: str | None = None) -> str:
         key = url.split("#")[0].rstrip("/")
         if key not in sources:
-            sources[key] = SourceInfo(f"S{len(sources) + 1}", url, title or url, page_age or "")
+            sources[key] = SourceInfo(f"S{len(sources) + 1}", url, (title or url).strip().lstrip("-• ").strip(),
+                                      _page_date(page_age))
         elif page_age and not sources[key].page_age:
-            sources[key].page_age = page_age
+            sources[key].page_age = _page_date(page_age)
         return sources[key].id
 
     for block in blocks:
         kind = getattr(block, "type", "")
+        if kind == "text":
+            cites = [c for c in (block.citations or []) if c.type == "web_search_result_location"]
+            start, full = len(full), full + block.text
+            if cites and block.text.strip():  # position of the cited words, ignoring surrounding spaces
+                lead = len(block.text) - len(block.text.lstrip())
+                cited.append((start + lead, start + len(block.text.rstrip()),
+                              [Evidence(source_id(c.url, c.title), _tidy(c.cited_text)) for c in cites]))
+            continue
+        full += "\n"  # a tool call ends the sentence before it
         if kind == "server_tool_use" and block.name == "web_search":
             queries.append((block.input or {}).get("query", ""))
         elif kind == "web_search_tool_result" and isinstance(block.content, list):  # an error is a single object
             for r in block.content:
                 source_id(r.url, r.title, getattr(r, "page_age", None))
-        elif kind == "text":
-            cites = [c for c in (block.citations or []) if c.type == "web_search_result_location"]
-            text = re.sub(r"\*\*|__", "", block.text).strip().lstrip("-*• ").strip()
-            if cites and text:
-                evidence = []
-                for c in cites:
-                    ev = Evidence(source_id(c.url, c.title), c.cited_text)
-                    if ev not in evidence:
-                        evidence.append(ev)
-                claims.append(Claim(f"C{len(claims) + 1}", text, evidence))
-            elif not cites:
-                loose_text.append(block.text)
-    return Research(claims, list(sources.values()), parse_gaps("".join(loose_text)), [q for q in queries if q])
+
+    starts = [0] + [m.end() for m in SENTENCE_END.finditer(full)]
+    grouped: dict[tuple[int, int], list[Evidence]] = {}
+    for start, end, evidence in cited:
+        key = (bisect_right(starts, start) - 1, bisect_right(starts, max(start, end - 1)) - 1)
+        bucket = grouped.setdefault(key, [])
+        bucket += [e for e in evidence if e not in bucket]
+    claims = []
+    for (first, last), evidence in grouped.items():
+        end = starts[last + 1] if last + 1 < len(starts) else len(full)
+        text = re.sub(r"\*\*|__", "", full[starts[first]:end]).strip().lstrip("-*• ").strip()
+        if text:
+            claims.append(Claim(f"C{len(claims) + 1}", text, evidence))
+    return Research(claims, list(sources.values()), parse_gaps(full), [q for q in queries if q])
+
+
+def _tidy(quote: str) -> str:
+    """Remove page formatting (markdown headings, escapes, line breaks) from a quote without changing its words."""
+    quote = re.sub(r"(?m)^\s*#+\s*", "", quote or "").replace("\\_", "_").replace("**", "")
+    return re.sub(r"\s+", " ", quote).strip()
+
+
+def _page_date(age: str | None) -> str:
+    """Turn a relative page age ("284 days ago") into a date, so it still means something in a saved report."""
+    match = AGO.search(age or "")
+    if not match:
+        return age or ""
+    unit = match.group(2).lower()
+    day = date.today() - timedelta(days=int(match.group(1)) * {"day": 1, "week": 7, "month": 30, "year": 365}[unit])
+    return day.isoformat() if unit in ("day", "week") else day.strftime("%Y-%m")
 
 
 def parse_gaps(text: str) -> list[str]:

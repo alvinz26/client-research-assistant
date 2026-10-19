@@ -1,6 +1,6 @@
 """The rules that keep the report traceable, enforced in code rather than by the prompt."""
 from research.models import Brief, Claim, Evidence, Research, SourceInfo
-from research.pipeline import build_report
+from research.pipeline import KEY_FACTS, build_report
 
 
 def _research():
@@ -19,34 +19,41 @@ def _research():
     )
 
 
-def _draft(**overrides):
-    draft = {
-        "summary": [{"text": "Acme is a registered glass supplier.", "claim_ids": ["C1", "C2"]}],
+def _fact(text="", *ids):
+    return {"text": text, "claim_ids": list(ids)}
+
+
+def _draft():
+    key_facts = {k: _fact() for k in KEY_FACTS}
+    key_facts["registration"] = _fact("Incorporated 2014.", "C1")
+    key_facts["size"] = _fact("Market leader in Europe.")  # no claim behind it
+    return {
+        "summary": [_fact("Acme is a registered glass supplier.", "C1", "C2")],
         "confidence": "medium",
         "confidence_reason": "Registry entry found.",
-        "sections": [
-            {"heading": "Identity & verification", "bullets": [{"text": "Registered in 2014.", "claim_ids": ["C1"]}]},
-            {"heading": "Business & products", "bullets": [
-                {"text": "Sells glass panels.", "claim_ids": ["C2"]},
-                {"text": "Market leader in Europe.", "claim_ids": []},
-                {"text": "Invented claim.", "claim_ids": ["C99"]},
-            ]},
-        ],
-        "unverified": [{"claim_id": "C3", "reason": "Quote says 40, not 400."}],
+        "key_facts": key_facts,
+        "products": [{"category": "Glass", "text": "Glass panels", "claim_ids": ["C2"]},
+                     {"category": "Doors", "text": "Invented product", "claim_ids": ["C99"]}],
+        "recent": [],
+        "risks": [],
+        "unverified": [{"claim_id": "C3", "reason": "Quote says 40, not 400.", "other_company": False}],
         "gaps": ["No revenue figures found."],
         "next_steps": ["Ask for their annual volume."],
         "source_types": [{"source_id": "S2", "type": "official"}],
     }
-    draft.update(overrides)
-    return draft
 
 
-def test_bullets_without_a_valid_claim_are_dropped_and_counted():
+def test_unsupported_text_is_removed_and_counted():
     report = build_report(Brief("Acme"), _research(), _draft())
-    texts = [b.text for s in report.sections for b in s.bullets]
-    assert "Market leader in Europe." not in texts
-    assert "Invented claim." not in texts
+    facts = {f.label: f for f in report.key_facts}
+    assert facts["size"].text == "" and facts["size"].refs == []  # shown as "Not found"
+    assert [p.text for p in report.products] == ["Glass panels"]
     assert report.removed == 2
+
+
+def test_key_facts_always_have_every_field_in_order():
+    report = build_report(Brief("Acme"), _research(), {"key_facts": {}})
+    assert [f.label for f in report.key_facts] == KEY_FACTS
 
 
 def test_numbers_follow_first_use_and_only_used_sources_are_listed():
@@ -55,7 +62,6 @@ def test_numbers_follow_first_use_and_only_used_sources_are_listed():
     assert report.summary[0].refs == [1, 2]
     assert [s.url for s in report.sources] == [
         "https://registry.example/acme", "https://acme.example/products", "https://news.example/acme"]
-    assert all(s.url != "https://never-used.example" for s in report.sources)
 
 
 def test_sources_carry_their_quotes_and_type():
@@ -73,3 +79,4 @@ def test_unverified_claims_keep_their_text_reason_and_reference():
     assert lead.text == "Has 400 staff."
     assert lead.note == "Quote says 40, not 400."
     assert lead.refs == [3]
+    assert report.sources[2].quotes == []  # a quote that failed the check isn't shown as evidence

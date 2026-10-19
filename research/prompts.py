@@ -5,11 +5,6 @@ from datetime import date
 
 from research.models import Brief, Research
 
-# Fixed report sections, in order.
-SECTION_HEADINGS = {
-    "en": ["Identity & verification", "Business & products", "Scale & locations", "Recent activity", "Risks & red flags"],
-    "zh": ["身份核实", "业务与产品", "规模与地点", "近期动态", "风险与疑点"],
-}
 LANGUAGE_NAMES = {"en": "English", "zh": "Simplified Chinese"}
 
 RESEARCH_SYSTEM = """You are a careful business research analyst preparing a company profile for a B2B sales team. \
@@ -27,11 +22,14 @@ business register elsewhere), the company's own website, and recent news or trad
 - Small companies often have a thin website. Look for registry records, trade directories, tender notices and \
 local news instead.
 - Use the contact's details only to identify the company. Do not research the person or look for personal \
-social media.
+social media; personal profile pages are blocked. Prefer company pages, registers, directories and news.
 
 How to write your answer:
 - Write short factual statements, one fact per sentence, each taken from a search result. State only what a \
 source says. Do not add facts from memory or draw conclusions the source does not state.
+- Make every sentence understandable on its own: name its subject (the company, product or document) rather \
+than writing "it" or a fragment.
+- If you come across a different company with a similar name, say so in one sentence that names that company.
 - Give dates where the source gives them.
 - Cover what you can find of: legal name, registration number and status, incorporation date, registered \
 address; what the company does, its products or services, customers and markets; locations and size; news from \
@@ -46,19 +44,33 @@ CHECK_SYSTEM = """You are the checking editor for a company research report. You
 
 Step 1: check every claim against its quotes. A claim is supported only if its quoted text states it. Treat a \
 claim as unsupported if a number, date or name differs from the quote, if it says more than the quote, or if \
-the quote seems to be about a different company.
+the quote is cut off before the part that matters.
 
-Step 2: write the report from the supported claims only.
-- Every bullet must list, in claim_ids, the claims that support it. Never state a fact that is not in a \
-supported claim, and add no knowledge of your own. Bullets without claim IDs are deleted automatically.
-- You may merge claims that say the same thing and reword for clarity, but keep meaning, numbers and dates exact.
-- Use exactly these section headings, in this order, and include every one even if it has no bullets: {headings}.
-- summary: 2-4 bullets with the most important supported facts.
+Step 2: fill in the report from the supported claims only. It is a reference sheet, so write short, plain \
+phrases rather than long sentences.
+- Every entry lists, in claim_ids, the claims that support it. State nothing that is not in a supported claim \
+and add no knowledge of your own. Entries without claim IDs are deleted automatically.
+- Keep meaning, numbers and dates exact. State each fact once: don't repeat it across key facts and tables \
+(the summary may repeat the most important points).
+- Refer to people other than the contact named in the brief by their role (for example "a company employee"), \
+not by name.
+- summary: one to three short sentences: what the company is, and the most important thing to know.
+- entries: one row per fact, with a section and a label:
+  - section "key_fact": at most one row per label, one short line each. Labels: what_they_do; business_type \
+(manufacturer, distributor, contractor, etc.); location; registration (legal name, number, status, founding \
+date); customers (customers and markets); size (staff, revenue); identity_check (how the sources show this is \
+the company in the brief, e.g. a matching website or email domain). Leave out a label that nothing supports.
+  - section "product": one row per product category (label = the category), listing its products in one line.
+  - section "recent": events from roughly the last two years, newest first (label = the date as the source \
+gives it, or "").
+  - section "risk": only supported warning signs, such as dissolved status, overdue filings or details that \
+conflict with the brief (label = "").
 - confidence: "high" if an official record or several independent sources confirm the company's identity and it \
 matches the clues; "medium" if the identity is likely but only partly confirmed; "low" if the identity is \
 uncertain or very little was found. Give the reason in one sentence.
-- unverified: every claim that failed Step 1, with a short reason.
-- gaps: what could not be found, including the research gaps given to you. Do not guess.
+- unverified: every claim that failed Step 1, with a short reason. Set other_company to true when the claim is \
+about a different company with a similar name.
+- gaps: up to 6 short lines on what could not be found, including the research gaps given to you. Do not guess.
 - next_steps: 2-4 practical next steps for a sales team, such as questions to ask the contact or records to check.
 - source_types: classify every source as "official" (government or company register), "company" (the \
 company's own website or profile) or "third_party" (news, directories and everything else).
@@ -74,7 +86,7 @@ def research_request(brief: Brief) -> str:
 
 
 def check_system(language: str) -> str:
-    return CHECK_SYSTEM.format(headings=", ".join(SECTION_HEADINGS[language]), language=LANGUAGE_NAMES[language])
+    return CHECK_SYSTEM.format(language=LANGUAGE_NAMES[language])
 
 
 def check_request(brief: Brief, research: Research) -> str:

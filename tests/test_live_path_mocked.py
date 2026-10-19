@@ -19,9 +19,9 @@ REGISTRY = "https://registry.example/acme"
 DRAFT = {
     "summary": [{"text": "Acme is an active glass supplier.", "claim_ids": ["C1", "C2"]}],
     "confidence": "medium", "confidence_reason": "Registry record found.",
-    "sections": [{"heading": "Identity & verification", "bullets": [
-        {"text": "Incorporated in 2014.", "claim_ids": ["C1"]},
-        {"text": "A fact the model made up.", "claim_ids": ["C42"]}]}],
+    "entries": [  # the API returns flat rows; the client sorts them into key facts and tables
+        {"section": "key_fact", "label": "registration", "text": "Incorporated in 2014.", "claim_ids": ["C1"]},
+        {"section": "product", "label": "Glass", "text": "A product the model made up.", "claim_ids": ["C42"]}],
     "unverified": [], "gaps": ["No revenue found."], "next_steps": ["Ask about volumes."],
     "source_types": [{"source_id": "S1", "type": "official"}],
 }
@@ -65,12 +65,14 @@ def test_live_run_numbers_sources_and_drops_unsupported_text(tmp_path, monkeypat
     result = run(Brief("Acme Glass", email="buyer@acme.example"), _live_config(tmp_path))
 
     research_call, continued_call, check_call = fake.calls
-    assert research_call["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]
+    assert research_call["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5,
+                                       "blocked_domains": ["linkedin.com/in"]}]  # no personal profiles
     assert research_call["fallbacks"] == "default"
     assert continued_call["messages"][-1]["role"] == "assistant"  # pause_turn: the paused turn is sent back
     assert "tools" not in check_call and "output_config" in check_call
 
     report = result.report
+    assert {f.label: f.text for f in report.key_facts}["registration"] == "Incorporated in 2014."
     assert [s.url for s in report.sources] == [REGISTRY, SITE]  # deduped, numbered by first use
     assert [s.number for s in report.sources] == [1, 2]
     assert report.sources[0].quotes == ["Incorporated on 12 May 2014", "SIC 23120"]
@@ -79,7 +81,7 @@ def test_live_run_numbers_sources_and_drops_unsupported_text(tmp_path, monkeypat
 
     doc_text = "\n".join(p.text for p in Document(result.path).paragraphs)
     assert "DEMO" not in doc_text
-    assert "A fact the model made up." not in doc_text
+    assert "A product the model made up." not in doc_text
     assert "[1] Registry" in doc_text
 
 

@@ -32,12 +32,14 @@ def test_demo_run_produces_labelled_cited_docx(tmp_path):
     assert "j.doe@harbourline.example" in text  # input clues are recorded
     assert "AI-assisted" in footer
 
-    # Every bullet in the fact sections carries at least one [n] that exists in the source list.
+    # Every filled-in fact carries at least one [n] that exists in the source list.
+    report = result.report
     numbers = {int(n) for n in re.findall(r"^\[(\d+)\]", text, re.M)}
-    for section in result.report.sections:
-        for bullet in section.bullets:
-            assert bullet.refs and set(bullet.refs) <= numbers
-    assert any(s.quotes for s in result.report.sources)
+    facts = [f for f in report.key_facts if f.text] + report.products + report.recent + report.risks
+    assert facts
+    for item in facts:
+        assert item.refs and set(item.refs) <= numbers
+    assert any(s.quotes for s in report.sources)
 
 
 def test_chinese_report_uses_chinese_labels(tmp_path):

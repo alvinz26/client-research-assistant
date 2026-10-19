@@ -68,16 +68,12 @@ class Research:
 
 
 @dataclass
-class Bullet:
+class Item:
+    """One row of the report: a fact with its source numbers. `label` is a field name, category or date."""
     text: str
     refs: list[int]
+    label: str = ""
     note: str = ""
-
-
-@dataclass
-class Section:
-    heading: str
-    bullets: list[Bullet]
 
 
 @dataclass
@@ -93,15 +89,19 @@ class Source:
 @dataclass
 class Report:
     brief: Brief
-    summary: list[Bullet]
+    summary: list[Item]
     confidence: str
     confidence_reason: str
-    sections: list[Section]
-    unverified: list[Bullet]
+    key_facts: list[Item]
+    products: list[Item]
+    recent: list[Item]
+    risks: list[Item]
+    unverified: list[Item]
     gaps: list[str]
     next_steps: list[str]
     sources: list[Source]
     queries: list[str]
     removed: int
+    pages_seen: int = 0
     demo: bool = False
     model: str = ""

@@ -10,10 +10,11 @@ from typing import Callable
 
 from research import demo
 from research.config import Config
-from research.models import Brief, Bullet, Report, Research, Section, Source, Usage
+from research.models import Brief, Item, Report, Research, Source, Usage
 from research.report import write_docx
 
 SOURCE_KINDS = {"official", "company", "third_party"}
+KEY_FACTS = ["what_they_do", "business_type", "location", "registration", "customers", "size", "identity_check"]
 
 
 @dataclass
@@ -45,7 +46,7 @@ def run(brief: Brief, cfg: Config, progress: Callable[[str], None] = lambda _: N
 def build_report(brief: Brief, research: Research, draft: dict, *, demo: bool = False, model: str = "") -> Report:
     """Turn the model's draft (which refers to claim IDs) into a report with numbered, quoted sources.
 
-    - A bullet with no valid claim ID is dropped and counted in `removed`.
+    - Text with no valid claim ID is dropped and counted in `removed`; an empty key fact shows as "not found".
     - Source numbers are assigned here, in order of first use; unused sources are not listed.
     """
     claims = {c.id: c for c in research.claims}
@@ -55,7 +56,7 @@ def build_report(brief: Brief, research: Research, draft: dict, *, demo: bool = 
     quotes: dict[str, list[str]] = {}
     removed = 0
 
-    def cite(claim_ids: list[str]) -> list[int]:
+    def cite(claim_ids: list[str], keep_quotes: bool = True) -> list[int]:
         refs: list[int] = []
         for cid in claim_ids:
             for ev in claims[cid].evidence:
@@ -65,31 +66,38 @@ def build_report(brief: Brief, research: Research, draft: dict, *, demo: bool = 
                 if n not in refs:
                     refs.append(n)
                 seen = quotes.setdefault(ev.source_id, [])
-                if ev.quote and ev.quote not in seen:
+                if keep_quotes and ev.quote and ev.quote not in seen:
                     seen.append(ev.quote)
         return refs
 
-    def bullets(items: list[dict]) -> list[Bullet]:
+    def item(entry: dict, label: str = "") -> Item | None:
         nonlocal removed
-        kept = []
-        for item in items:
-            refs = cite([c for c in item.get("claim_ids", []) if c in claims])
-            if refs:
-                kept.append(Bullet(item.get("text", "").strip(), refs))
-            else:
-                removed += 1
-        return kept
+        text = entry.get("text", "").strip()
+        refs = cite([c for c in entry.get("claim_ids", []) if c in claims])
+        if text and refs:
+            return Item(text, refs, label)
+        removed += bool(text)
+        return None
 
-    summary = bullets(draft.get("summary", []))
-    sections = [Section(s.get("heading", ""), bullets(s.get("bullets", []))) for s in draft.get("sections", [])]
-    unverified = [Bullet(claims[u["claim_id"]].text, cite([u["claim_id"]]), u.get("reason", ""))
-                  for u in draft.get("unverified", []) if u.get("claim_id") in claims]
+    def rows(key: str, label_key: str = "") -> list[Item]:
+        made = (item(e, e.get(label_key, "")) for e in draft.get(key, []))
+        return [x for x in made if x]
+
+    summary = rows("summary")
+    facts = draft.get("key_facts", {})
+    key_facts = [item(facts.get(k, {}), k) or Item("", [], k) for k in KEY_FACTS]
+    products, recent, risks = rows("products", "category"), rows("recent", "date"), rows("risks")
+    # Quotes are listed only for facts in the report; an unverified lead's quote didn't support it anyway.
+    unverified = [Item(claims[u["claim_id"]].text, cite([u["claim_id"]], keep_quotes=False),
+                       "other" if u.get("other_company") else "",
+                       u.get("reason", "")) for u in draft.get("unverified", []) if u.get("claim_id") in claims]
     sources = [Source(n, info[sid].url, info[sid].title, info[sid].page_age,
                       kinds.get(sid) if kinds.get(sid) in SOURCE_KINDS else "unclassified", quotes.get(sid, []))
                for sid, n in numbers.items()]
     return Report(
         brief=brief, summary=summary, confidence=draft.get("confidence", "low"),
-        confidence_reason=draft.get("confidence_reason", ""), sections=sections, unverified=unverified,
-        gaps=draft.get("gaps", []), next_steps=draft.get("next_steps", []),
-        sources=sources, queries=research.queries, removed=removed, demo=demo, model=model,
+        confidence_reason=draft.get("confidence_reason", ""), key_facts=key_facts, products=products,
+        recent=recent, risks=risks, unverified=unverified, gaps=draft.get("gaps", []),
+        next_steps=draft.get("next_steps", []), sources=sources, queries=research.queries, removed=removed,
+        pages_seen=len(research.sources), demo=demo, model=model,
     )
