@@ -67,6 +67,18 @@ class ResearchError(Exception):
     """A problem explained in plain words, safe to show to the user."""
 
 
+def verify_key(key: str) -> None:
+    """Check that a key works by listing models, which costs nothing. Raises ResearchError if it doesn't."""
+    try:
+        anthropic.Anthropic(api_key=key).models.list(limit=1)
+    except anthropic.AuthenticationError:
+        raise ResearchError("That API key was rejected. Check that it was copied in full.") from None
+    except anthropic.APIConnectionError:
+        raise ResearchError("Could not reach the Anthropic API. Check your internet connection.") from None
+    except anthropic.APIStatusError as e:
+        raise ResearchError(f"The key couldn't be checked ({e.status_code}). Try again shortly.") from None
+
+
 class ClaudeClient:
     def __init__(self, cfg: Config):
         self.cfg = cfg

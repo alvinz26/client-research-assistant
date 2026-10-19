@@ -29,8 +29,30 @@ class Config:
         return f"Config(model={self.model!r}, max_searches={self.max_searches}, demo={self.demo})"
 
 
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"  # gitignored
+KEY_NAME = "ANTHROPIC_API_KEY"
+
+
+def save_api_key(key: str, path: Path = ENV_PATH) -> None:
+    """Store the key in the local .env (created from .env.example if missing), keeping every other setting."""
+    example = path.parent / ".env.example"
+    text = path.read_text(encoding="utf-8") if path.exists() else (
+        example.read_text(encoding="utf-8") if example.exists() else "")
+    lines = [ln for ln in text.splitlines() if not ln.strip().startswith(f"{KEY_NAME}=")]
+    path.write_text("\n".join([f"{KEY_NAME}={key.strip()}", *lines]) + "\n", encoding="utf-8")
+    os.environ[KEY_NAME] = key.strip()
+
+
+def remove_api_key(path: Path = ENV_PATH) -> None:
+    """Delete the saved key from the local .env; the app falls back to demo mode."""
+    if path.exists():
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if not ln.strip().startswith(f"{KEY_NAME}=")]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ.pop(KEY_NAME, None)
+
+
 def load_config() -> Config:
-    load_dotenv()
+    load_dotenv(ENV_PATH)
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip() or None
     return Config(
         api_key=api_key,

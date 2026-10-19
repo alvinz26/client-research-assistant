@@ -3,8 +3,8 @@ import time
 
 import streamlit as st
 
-from research.claude_client import ResearchError
-from research.config import estimate_cost, load_config
+from research.claude_client import ResearchError, verify_key
+from research.config import estimate_cost, load_config, remove_api_key, save_api_key
 from research.models import Brief
 from research.pipeline import run
 
@@ -12,10 +12,31 @@ DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 
 st.set_page_config(page_title="Client Research Assistant", page_icon=":mag:")
 cfg = load_config()
+
+with st.sidebar:  # API key setup, for running on your own computer
+    st.subheader("API key")
+    if cfg.api_key:
+        st.success("A key is saved on this computer.")
+        if st.button("Remove saved key"):
+            remove_api_key()
+            st.rerun()
+    else:
+        st.caption("Paste an Anthropic API key to run real research. It is checked (free of charge), "
+                   "then saved in a local .env file that is never uploaded to GitHub.")
+        new_key = st.text_input("Anthropic API key", type="password", placeholder="sk-ant-...")
+        if st.button("Save key", type="primary", disabled=not new_key.strip()):
+            try:
+                verify_key(new_key.strip())
+            except ResearchError as e:
+                st.error(str(e))
+            else:
+                save_api_key(new_key)
+                st.rerun()
+
 st.title("Client Research Assistant")
 st.caption("Enter a company, get a Word report in which every statement points to a quoted source.")
 if cfg.demo:
-    st.warning("**DEMO MODE**: no API key found (or DEMO_MODE=1). "
+    st.warning("**DEMO MODE**: no API key yet (add one in the sidebar), or DEMO_MODE=1. "
                "The report always shows a fictional sample company, whatever you type.")
 
 with st.form("brief"):

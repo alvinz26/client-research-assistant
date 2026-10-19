@@ -43,35 +43,32 @@ An example report, made in demo mode about a fictional company, is in [`samples/
 
 ## Quick start
 
-Python 3.11 or newer.
+You need [Python 3.11 or newer](https://www.python.org/downloads/). On Windows, tick "Add python.exe to PATH" when installing.
+
+1. Download the project: **Code → Download ZIP** on GitHub, then unzip it (or `git clone` it).
+2. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS). The first run installs everything it needs, which takes a minute or two. After that the page opens in your browser at `http://localhost:8501`. Keep the small window open while you use the app.
+   - On macOS, if the file is blocked as being from an unidentified developer, right-click it and choose **Open**.
+3. **Try it without a key.** The page starts in demo mode: the full workflow runs on built-in sample data about a fictional company. Every demo output is labelled DEMO, including a red banner in the Word file.
+4. **Use it for real.** Paste an [Anthropic API key](https://platform.claude.com/) into the sidebar and click **Save key**. The key is first checked for free, then saved in a local `.env` file; you won't need to enter it again. `.env` is in `.gitignore`, so it is never uploaded. **Remove saved key** deletes it. Web search must be enabled for your organisation in the Claude Console (it is by default).
+
+The key-saving sidebar is meant for running on your own computer. Don't deploy this page to a public server as it is.
+
+**From a terminal** (optional):
 
 ```bash
-git clone https://github.com/alvinz26/client-research-assistant.git
-cd client-research-assistant
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-**Try it without a key (demo mode).** With no API key set, the full workflow runs on built-in sample data about a fictional company. Every demo output is labelled DEMO, including a red banner in the Word file.
-
-```bash
 streamlit run app.py
-```
-
-**Use it for real.** Copy `.env.example` to `.env` and add an [Anthropic API key](https://platform.claude.com/). Web search must be enabled for your organisation in the Claude Console (it is by default).
-
-```bash
-streamlit run app.py
-# or from the command line:
-python cli.py "Company name" --website example.com --location "Leeds, UK" --email buyer@example.com --lang en
+# or without the page:
+python cli.py "Company name" --website example.com --location "Leeds, UK" --lang en
 ```
 
 Reports are saved in `outputs/`. Tests run offline with no key: `pytest`.
 
 ## Configuration
 
-Set in `.env` (see `.env.example`):
+Set in `.env` (see `.env.example`). The sidebar writes the key for you; the other settings are edited by hand.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -96,7 +93,8 @@ More detail in [DECISIONS.md](DECISIONS.md).
 ## Project structure
 
 ```
-app.py                  Streamlit page: form -> progress -> summary + download
+start.bat, start.command  Double-click launchers (Windows, macOS)
+app.py                  Streamlit page: form -> progress -> summary + download; key setup in the sidebar
 cli.py                  Command-line version
 research/
   config.py             Settings from .env, cost estimate
