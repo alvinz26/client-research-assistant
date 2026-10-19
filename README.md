@@ -130,3 +130,7 @@ Two runs with the default model each cost about **US$0.25-0.40** and took **50-6
 | Run 2 | 6 | 61k / 7k | $0.25 | 51 s |
 
 These costs are estimates calculated from the token counts the API reported, at $2 / $10 per million input / output tokens plus $10 per 1,000 searches; they are not taken from an invoice. Most of the input tokens are search results. Two runs are not a benchmark, and costs will vary with the company. `claude-haiku-5-5` is much cheaper per token. The app and CLI show the same estimate after every run.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
