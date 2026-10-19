@@ -46,7 +46,7 @@ An example report, made in demo mode about a fictional company, is in [`samples/
 You need [Python 3.11 or newer](https://www.python.org/downloads/). On Windows, tick "Add python.exe to PATH" when installing.
 
 1. Download the project: **Code → Download ZIP** on GitHub, then unzip it (or `git clone` it).
-2. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS). The first run installs everything it needs, which takes a minute or two. After that the page opens in your browser at `http://localhost:8501`. Keep the small window open while you use the app.
+2. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS). The first run installs everything it needs, which takes a few minutes. After that the page opens in your browser at `http://localhost:8501`. Keep the small window open while you use the app.
    - On macOS, if the file is blocked as being from an unidentified developer, right-click it and choose **Open**.
 3. **Try it without a key.** The page starts in demo mode: the full workflow runs on built-in sample data about a fictional company. Every demo output is labelled DEMO, including a red banner in the Word file.
 4. **Use it for real.** Paste an [Anthropic API key](https://platform.claude.com/) into the sidebar and click **Save key**. The key is first checked for free, then saved in a local `.env` file; you won't need to enter it again. `.env` is in `.gitignore`, so it is never uploaded. **Remove saved key** deletes it. Web search must be enabled for your organisation in the Claude Console (it is by default).

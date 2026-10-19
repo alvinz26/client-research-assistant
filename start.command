@@ -3,7 +3,7 @@
 cd "$(dirname "$0")" || exit 1
 
 if [ ! -x .venv/bin/python ]; then
-  echo "First run: setting things up. This takes a minute or two..."
+  echo "First run: setting things up. This takes a few minutes..."
   if ! python3 -m venv .venv; then
     echo "Python 3.11 or newer is needed: https://www.python.org/downloads/"
     read -r -p "Press Enter to close."

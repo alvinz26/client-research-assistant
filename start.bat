@@ -3,7 +3,7 @@ rem Double-click to start Client Research Assistant in your browser (Windows).
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo First run: setting things up. This takes a minute or two...
+    echo First run: setting things up. This takes a few minutes...
     where py >nul 2>nul && (py -3 -m venv .venv) || (python -m venv .venv)
 )
 if not exist ".venv\Scripts\python.exe" (
