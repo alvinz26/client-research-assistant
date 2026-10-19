@@ -1,0 +1,9 @@
+.env
+outputs/
+notes/
+.venv/
+.claude/
+__pycache__/
+*.pyc
+.pytest_cache/
+~$*.docx
