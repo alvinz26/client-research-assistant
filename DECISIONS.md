@@ -10,8 +10,12 @@ Short notes on the main trade-offs, for anyone reviewing the code.
 
 **4. Basic web search tool (`web_search_20250305`).** Newer versions filter results with code first, which saves tokens but adds a layer between the page and the citation. Traceability matters more here than token cost.
 
-**5. Clues identify the company; the person is not researched.** Contact details (email domain, phone prefix, job title) are used to find and confirm the right company, especially small firms with a thin web presence. The prompts tell Claude not to profile the individual.
+**5. Clues identify the company; the person is not researched.** Contact details (email domain, phone prefix, job title) are used to find and confirm the right company, especially small firms with a thin web presence. Testing showed that a prompt instruction alone wasn't enough, because a personal LinkedIn page was used as a source. Personal profile pages (`linkedin.com/in`) are now blocked in the search tool itself, and the check step refers to people other than the named contact by role.
 
 **6. One provider for now, isolated in one file.** All API code lives in `research/claude_client.py`, which returns plain data classes. Another provider would be a second client with the same two methods. It was left out on purpose: the evidence quotes that the check pass relies on come from the Anthropic citation format.
 
-**7. Fixed report sections.** Every report has the same headings, so reports for different companies can be compared and missing information is visible.
+**7. A fixed reference-sheet layout.** Every report has the same key-facts table (what they do, business type, location, registration, customers, size, identity check), with "Not found" where nothing was confirmed. Reports for different companies can then be compared, and missing information is visible at a glance. Sources go last in small print, which brought a test report down from seven pages to under two.
+
+**8. Claims are whole sentences.** The API often attaches a citation to part of a sentence ("incorporated in 2014"). On its own, that fragment can't be checked or understood, so each claim is widened to the full sentence it sits in.
+
+**9. A flat structured-output schema.** The check step returns JSON that must match a schema. A nested version (one object per key fact) was rejected by the API as too complex. The model now returns flat rows (`section`, `label`, `text`, `claim_ids`), and the code sorts them into the report.
