@@ -220,7 +220,9 @@ def parse_research(blocks: list) -> Research:
 
 def _tidy(quote: str) -> str:
     """Remove page formatting (markdown headings, escapes, line breaks) from a quote without changing its words."""
-    quote = re.sub(r"(?m)^\s*#+\s*", "", quote or "").replace("\\_", "_").replace("**", "")
+    quote = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", quote or "")  # markdown links and images: keep the text
+    quote = re.sub(r"\]\([^)]*\)|\[\]", "", quote)  # link pieces cut in half at the start of a quote
+    quote = re.sub(r"(?m)^\s*(#+\s*|[-*]\s+)", "", quote).replace("\\_", "_").replace("**", "")
     return re.sub(r"\s+", " ", quote).strip()
 
 

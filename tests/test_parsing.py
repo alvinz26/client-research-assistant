@@ -54,14 +54,16 @@ def test_gaps_are_read_from_the_gaps_list():
 
 
 def test_citations_into_a_fetched_page_use_the_exact_page_text():
-    page = "Accueil. Nous fabriquons des planchers rayonnants, des plafonds chauffants et des câbles chauffants."
-    start = page.index("des planchers")
+    page = ("Accueil. Nous fabriquons des [planchers rayonnants](https://acme.example/p1), "
+            "des plafonds chauffants et des câbles chauffants.")
+    start = page.index("des [planchers")
     research = parse_research([
         fetched("https://acme.example/produits", "Produits", page),
         fetch_text("Acme makes radiant floors, heated ceilings and heating cables.", 0, start, len(page), "des planchers..."),
     ])
     claim = research.claims[0]
-    assert claim.evidence[0].quote == page[start:]  # the full span, not the shortened snippet
+    # The full span, not the shortened snippet, with the page's link markup removed.
+    assert claim.evidence[0].quote == "des planchers rayonnants, des plafonds chauffants et des câbles chauffants."
     assert research.sources[0].url == "https://acme.example/produits"
 
 

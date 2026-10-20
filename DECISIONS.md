@@ -8,7 +8,9 @@ Short notes on the main trade-offs, for anyone reviewing the code.
 
 **3. An automatic check pass instead of a review form.** The second call compares each claim with its quoted evidence before writing. Claims the quote doesn't support are moved to "Unverified leads" with a reason. The person checks the finished Word file, where each numbered source lists the exact text quoted from it, so checking a fact means reading a line, not searching again.
 
-**4. Basic web search tool (`web_search_20250305`).** Newer versions filter results with code first, which saves tokens but adds a layer between the page and the citation. Traceability matters more here than token cost.
+**4. Basic web search, plus full-page reading for key pages.** I use `web_search_20250305`: newer versions filter results with code first, which saves tokens but adds a layer between the page and the citation, and traceability matters more here than token cost. Search citations quote only about 150 characters, though. In testing, this cut long product lists off halfway, so the check step rejected true facts. The web fetch tool (`web_fetch_20250910`, up to three pages, citations on) now reads the most important pages in full, and the code takes the exact cited text from the page. When a quote is still cut off, the check step keeps the visible part instead of rejecting the whole claim.
+
+**4b. One report language.** Research statements are always written in English, and the check step writes the report, including unverified leads, in the chosen language. Quotes stay in the source's language so they can be found on the page.
 
 **5. Clues identify the company; the person is not researched.** Contact details (email domain, phone prefix, job title) are used to find and confirm the right company, especially small firms with a thin web presence. Testing showed that a prompt instruction alone wasn't enough, because a personal LinkedIn page was used as a source. Personal profile pages (`linkedin.com/in`) are now blocked in the search tool itself, and the check step refers to people other than the named contact by role.
 

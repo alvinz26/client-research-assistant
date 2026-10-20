@@ -25,6 +25,8 @@ Ireland, annuaire-entreprises.data.gouv.fr in France), or a directory that shows
   4. news, trade press and trade fairs from the last two years.
 - Use web fetch for at most three pages that matter most, normally the company's own pages and its register \
 entry. You can only fetch URLs from the brief or from search results.
+- Reading pages does not replace searching. Search for every item on the list above, including the register, \
+any group or parent company, customers and news, and use most of your searches before you stop.
 - Small companies often have a thin website. Look for registry records, trade directories, tender notices and \
 local news instead.
 - Use the contact's details only to identify the company. Do not research the person or look for personal \
@@ -60,7 +62,8 @@ Step 2: fill in the report from what Step 1 supports. It is a reference sheet, s
 rather than long sentences.
 - Every entry lists, in claim_ids, the claims that support it. State nothing that the quotes don't support and \
 add no knowledge of your own. Entries without claim IDs are deleted automatically.
-- Keep meaning, numbers and dates exact. State each fact once: don't repeat it across key facts and tables \
+- Keep meaning, numbers and dates exact. Leave out a number whose meaning the quote doesn't make clear (for \
+example an unlabelled amount). State each fact once: don't repeat it across key facts and tables \
 (the summary may repeat the most important points).
 - Refer to people other than the contact named in the brief by their role (for example "a company employee"), \
 not by name.

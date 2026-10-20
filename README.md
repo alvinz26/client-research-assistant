@@ -26,8 +26,8 @@ flowchart TD
     G --> H[4. Word report<br/>with sources and quotes]
 ```
 
-1. **Research.** One Claude call with Anthropic's web search tool. Claude chooses its own searches (8 at most by default). It uses the clues to pin down the right company: an email domain points to the website, a phone code to the country. It then checks the official company register, the company's own site and recent news. Personal profile pages (`linkedin.com/in`) are blocked at the tool level. The API attaches citations to the text, each with the source URL and a quote from the page. Every cited sentence becomes a *claim*; the API often cites only part of a sentence, so the claim is widened to the whole sentence. Text without a citation (introductions, commentary) is dropped.
-2. **Check.** A second Claude call, without web access, compares each claim with its quoted text. Supported claims fill a fixed set of fields and tables. Claims whose quote doesn't back them up (a different number, a quote cut off before the point) go to "Unverified leads" with the reason; claims about a different company with a similar name are listed in one line, so they can't be mixed up with the right one.
+1. **Research.** One Claude call with Anthropic's web search tool. Claude chooses its own searches (8 at most by default). It uses the clues to pin down the right company: an email domain points to the website, a phone code to the country. It then checks the official company register, the company's own site, its customers and recent news. It reads up to three key pages in full with the web fetch tool, so quotes from those pages are complete sentences rather than short snippets. Personal profile pages (`linkedin.com/in`) are blocked at the tool level. The API attaches citations to the text, each with the source URL and a quote from the page. Statements are written in English whatever the language of the source; the quotes stay in the original language. Every cited sentence becomes a *claim*; the API often cites only part of a sentence, so the claim is widened to the whole sentence. Text without a citation (introductions, commentary) is dropped.
+2. **Check.** A second Claude call, without web access, compares each claim with its quoted text. Supported claims fill a fixed set of fields and tables. If a quote is cut off, only the part it shows is used. Claims whose quote doesn't back them up go to "Unverified leads" with the reason, written in the report language; claims about a different company with a similar name are listed in one line, so they can't be mixed up with the right one.
 3. **Numbering.** The check step may only refer to claim IDs. The code turns those IDs into `[n]` numbers, so the model cannot invent a citation or point one at the wrong page. Text with no valid claim behind it is removed, and the report says how many were removed.
 4. **Export.** A compact `.docx`, usually one to two pages:
    - a bottom line and a confidence level;
@@ -111,6 +111,7 @@ DECISIONS.md            Design trade-offs
 
 ## Limitations
 
+- Full-page reading doesn't work on pages that need JavaScript to show their content, so those still rely on short search snippets.
 - It only knows what web search finds. Registers that need a login or are not indexed won't appear, and very small firms may come back with little more than gaps.
 - Quotes are short (up to about 150 characters), and some are cut off before the part that matters. Because the check step is strict, true statements can end up under "Unverified leads". A statement can also be supported by its quote but lack context. Follow the link when a fact matters.
 - A source can itself be wrong or out of date, for example a company describing itself on its own site. Each source shows its type (official record, company's own site, third party) and its page date when one is available.
@@ -120,14 +121,15 @@ DECISIONS.md            Design trade-offs
 
 ## Cost
 
-Two runs with the default model each cost about **US$0.25-0.40** and took **50-60 seconds**:
+Three runs with the default model each cost about **US$0.25-0.40** and took **1-2 minutes**:
 
 | Run | Searches | Input / output tokens | Estimated cost | Time |
 |---|---|---|---|---|
 | Run 1 | 7 | 122k / 7k | $0.39 | 58 s |
 | Run 2 | 6 | 61k / 7k | $0.25 | 51 s |
+| Run 3 | 2 (+3 pages read) | 91k / 14k | $0.35 | 103 s |
 
-These costs are estimates calculated from the token counts the API reported, at $2 / $10 per million input / output tokens plus $10 per 1,000 searches; they are not taken from an invoice. Most of the input tokens are search results. Two runs are not a benchmark, and costs will vary with the company. `claude-haiku-5-5` is much cheaper per token. The app and CLI show the same estimate after every run.
+These costs are estimates calculated from the token counts the API reported, at $2 / $10 per million input / output tokens plus $10 per 1,000 searches; they are not taken from an invoice. Most of the input tokens are search results. The first two runs were made before full-page reading was added. Three runs are not a benchmark, and costs will vary with the company. `claude-haiku-5-5` is much cheaper per token. The app and CLI show the same estimate after every run.
 
 ## License
 
