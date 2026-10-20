@@ -88,7 +88,7 @@ def build_report(brief: Brief, research: Research, draft: dict, *, demo: bool = 
     key_facts = [item(facts.get(k, {}), k) or Item("", [], k) for k in KEY_FACTS]
     products, recent, risks = rows("products", "category"), rows("recent", "date"), rows("risks")
     # Quotes are listed only for facts in the report; an unverified lead's quote didn't support it anyway.
-    unverified = [Item(claims[u["claim_id"]].text, cite([u["claim_id"]], keep_quotes=False),
+    unverified = [Item(u.get("text") or claims[u["claim_id"]].text, cite([u["claim_id"]], keep_quotes=False),
                        "other" if u.get("other_company") else "",
                        u.get("reason", "")) for u in draft.get("unverified", []) if u.get("claim_id") in claims]
     sources = [Source(n, info[sid].url, info[sid].title, info[sid].page_age,

@@ -102,7 +102,7 @@ def write_docx(report: Report, output_dir: Path) -> Path:
         titles = {s.number: s.title for s in report.sources}
         p = doc.add_paragraph()
         _run(p, f"{t['other']} ", size=9, bold=True)
-        _run(p, "; ".join(f"{titles.get(n, '')} [{n}]" for n in others), size=9, colour=GREY)
+        _run(p, "; ".join(f"{_short(titles.get(n, ''), 60)} [{n}]" for n in others), size=9, colour=GREY)
 
     doc.add_paragraph()  # keeps this table from joining the one above
     table = _grid(doc, 2, (9, 9))
@@ -116,14 +116,15 @@ def write_docx(report: Report, output_dir: Path) -> Path:
     doc.add_heading(t["sources"], level=1)
     for s in report.sources:
         p = doc.add_paragraph()
-        _run(p, f"[{s.number}] {s.title}", size=8, bold=True)
+        _run(p, f"[{s.number}] {_short(s.title, 100)}", size=8, bold=True)
         meta = t["kinds"].get(s.kind, s.kind) + (f", {s.page_age}" if s.page_age else "")
         _run(p, f"  ({meta})  ", size=8, colour=GREY)
         _link(p, s.url)
         if s.quotes:
             q = doc.add_paragraph()
             q.paragraph_format.left_indent = Cm(0.6)
-            _run(q, " · ".join(f"“{x}”" for x in s.quotes), size=8, italic=True, colour=GREY)
+            # Quotes from a fully read page can be long; the full text is one click away.
+            _run(q, " · ".join(f"“{_short(x, 300)}”" for x in s.quotes), size=8, italic=True, colour=GREY)
 
     clues = [f"{t['company']}: {report.brief.company}"] + [
         f"{t['clues'].get(label, label)}: {value}" for label, value in report.brief.clues()]
@@ -167,6 +168,10 @@ def _run(p, text: str, size: float | None = None, bold=False, italic=False, colo
     if colour:
         run.font.color.rgb = colour
     return run
+
+
+def _short(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit].rstrip() + "..."
 
 
 def _refs(p, refs: list[int]) -> None:

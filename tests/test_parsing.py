@@ -1,7 +1,7 @@
 """Turning the research response's content blocks into claims, sources, queries and gaps."""
 from types import SimpleNamespace as NS
 
-from fakes import query, results, text
+from fakes import fetch_text, fetched, query, results, text
 from research.claude_client import parse_gaps, parse_research
 
 REGISTRY = "https://registry.example/acme"
@@ -51,6 +51,18 @@ def test_sources_are_deduped_by_url_and_keep_page_age():
 def test_gaps_are_read_from_the_gaps_list():
     assert parse_research(_blocks()).gaps == ["No revenue figures found", "No staff numbers found"]
     assert parse_gaps("No marker here\n- not a gap") == []
+
+
+def test_citations_into_a_fetched_page_use_the_exact_page_text():
+    page = "Accueil. Nous fabriquons des planchers rayonnants, des plafonds chauffants et des câbles chauffants."
+    start = page.index("des planchers")
+    research = parse_research([
+        fetched("https://acme.example/produits", "Produits", page),
+        fetch_text("Acme makes radiant floors, heated ceilings and heating cables.", 0, start, len(page), "des planchers..."),
+    ])
+    claim = research.claims[0]
+    assert claim.evidence[0].quote == page[start:]  # the full span, not the shortened snippet
+    assert research.sources[0].url == "https://acme.example/produits"
 
 
 def test_search_errors_do_not_break_parsing():

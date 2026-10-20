@@ -65,8 +65,10 @@ def test_live_run_numbers_sources_and_drops_unsupported_text(tmp_path, monkeypat
     result = run(Brief("Acme Glass", email="buyer@acme.example"), _live_config(tmp_path))
 
     research_call, continued_call, check_call = fake.calls
-    assert research_call["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5,
-                                       "blocked_domains": ["linkedin.com/in"]}]  # no personal profiles
+    search_tool, fetch_tool = research_call["tools"]
+    assert search_tool == {"type": "web_search_20250305", "name": "web_search", "max_uses": 5,
+                           "blocked_domains": ["linkedin.com/in"]}  # no personal profiles
+    assert fetch_tool["name"] == "web_fetch" and fetch_tool["citations"] == {"enabled": True}
     assert research_call["fallbacks"] == "default"
     assert continued_call["messages"][-1]["role"] == "assistant"  # pause_turn: the paused turn is sent back
     assert "tools" not in check_call and "output_config" in check_call

@@ -15,6 +15,10 @@ from research.pipeline import KEY_FACTS
 
 WEB_SEARCH_TOOL = "web_search_20250305"
 BLOCKED_DOMAINS = ["linkedin.com/in"]  # personal profile pages: research the company, not the person
+# Web fetch reads a whole page, so its citations carry the exact text instead of a ~150-character snippet.
+# It can only open URLs from the brief or from search results, so personal profiles stay out.
+WEB_FETCH_TOOL = {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": 3,
+                  "citations": {"enabled": True}, "max_content_tokens": 8000}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CONTINUATIONS = 4  # how many times a paused research turn is resumed
 
@@ -39,7 +43,7 @@ DRAFT_SCHEMA = _obj(
     confidence_reason=_str,
     entries=_list(_obj(section=_enum("key_fact", "product", "recent", "risk"), label=_str, text=_str,
                        claim_ids=_list(_str))),
-    unverified=_list(_obj(claim_id=_str, reason=_str, other_company={"type": "boolean"})),
+    unverified=_list(_obj(claim_id=_str, text=_str, reason=_str, other_company={"type": "boolean"})),
     gaps=_list(_str),
     next_steps=_list(_str),
     source_types=_list(_obj(source_id=_str, type=_enum("official", "company", "third_party"))),
@@ -94,7 +98,7 @@ class ClaudeClient:
             response = self._create(
                 max_tokens=16000, system=prompts.RESEARCH_SYSTEM, messages=messages,
                 tools=[{"type": WEB_SEARCH_TOOL, "name": "web_search", "max_uses": self.cfg.max_searches,
-                        "blocked_domains": BLOCKED_DOMAINS}])
+                        "blocked_domains": BLOCKED_DOMAINS}, WEB_FETCH_TOOL])
             blocks.extend(response.content)
             if response.stop_reason != "pause_turn":
                 break
@@ -155,6 +159,7 @@ def parse_research(blocks: list) -> Research:
     """
     sources: dict[str, SourceInfo] = {}
     queries: list[str] = []
+    fetched: list[tuple[str, str]] = []  # (source id, page text) for each page read with web fetch, in order
     full = ""
     cited: list[tuple[int, int, list[Evidence]]] = []
 
@@ -167,15 +172,24 @@ def parse_research(blocks: list) -> Research:
             sources[key].page_age = _page_date(page_age)
         return sources[key].id
 
+    def evidence(c) -> Evidence | None:
+        if c.type == "web_search_result_location":
+            return Evidence(source_id(c.url, c.title), _tidy(c.cited_text))
+        index = getattr(c, "document_index", None)  # a citation into a fetched page
+        if c.type in ("char_location", "page_location") and index is not None and index < len(fetched):
+            sid, page = fetched[index]
+            exact = page[c.start_char_index:c.end_char_index] if c.type == "char_location" and page else ""
+            return Evidence(sid, _tidy(exact or c.cited_text))
+        return None
+
     for block in blocks:
         kind = getattr(block, "type", "")
         if kind == "text":
-            cites = [c for c in (block.citations or []) if c.type == "web_search_result_location"]
+            found = [e for e in map(evidence, block.citations or []) if e]
             start, full = len(full), full + block.text
-            if cites and block.text.strip():  # position of the cited words, ignoring surrounding spaces
+            if found and block.text.strip():  # position of the cited words, ignoring surrounding spaces
                 lead = len(block.text) - len(block.text.lstrip())
-                cited.append((start + lead, start + len(block.text.rstrip()),
-                              [Evidence(source_id(c.url, c.title), _tidy(c.cited_text)) for c in cites]))
+                cited.append((start + lead, start + len(block.text.rstrip()), found))
             continue
         full += "\n"  # a tool call ends the sentence before it
         if kind == "server_tool_use" and block.name == "web_search":
@@ -183,6 +197,11 @@ def parse_research(blocks: list) -> Research:
         elif kind == "web_search_tool_result" and isinstance(block.content, list):  # an error is a single object
             for r in block.content:
                 source_id(r.url, r.title, getattr(r, "page_age", None))
+        elif kind == "web_fetch_tool_result" and getattr(block.content, "type", "") == "web_fetch_result":
+            doc = block.content.content
+            source = getattr(doc, "source", None)
+            page = source.data if getattr(source, "type", "") == "text" else ""
+            fetched.append((source_id(block.content.url, getattr(doc, "title", None)), page))
 
     starts = [0] + [m.end() for m in SENTENCE_END.finditer(full)]
     grouped: dict[tuple[int, int], list[Evidence]] = {}
