@@ -4,6 +4,8 @@
 
 Type in a company name, plus any clues you have (a website, a contact's email or phone number, where you met). The tool uses Claude with web search to research the company, checks every statement against the source text it came from, and writes a Word report. Each statement in the report has a number like `[3]`, and source 3 at the end gives the page title, the link and the exact sentence quoted from that page, so any fact can be checked against its source. Anything that couldn't be confirmed is listed separately instead of being guessed.
 
+**Download:** [latest release (.zip)](https://github.com/alvinz26/client-research-assistant/releases/latest). Unzip it and double-click `start.bat` (Windows) or `start.command` (macOS); see [Quick start](#quick-start).
+
 ## Why I built it
 
 I do part-time business development for a Chinese construction-materials exporter. Every time we looked at a new prospect, I repeated the same steps: search the company, read through the results, pull out what mattered, and write it up for the team. The steps never changed; only the company did.
@@ -45,7 +47,7 @@ An example report, made in demo mode about a fictional company, is in [`samples/
 
 You need [Python 3.11 or newer](https://www.python.org/downloads/). On Windows, tick "Add python.exe to PATH" when installing.
 
-1. Download the project: **Code → Download ZIP** on GitHub, then unzip it (or `git clone` it).
+1. Download the zip from the [latest release](https://github.com/alvinz26/client-research-assistant/releases/latest) and unzip it (or `git clone` the repository).
 2. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS). The first run installs everything it needs, which takes a few minutes. After that the page opens in your browser at `http://localhost:8501`. Keep the small window open while you use the app.
    - On macOS, if the file is blocked as being from an unidentified developer, right-click it and choose **Open**.
 3. **Try it without a key.** The page starts in demo mode: the full workflow runs on built-in sample data about a fictional company. Every demo output is labelled DEMO, including a red banner in the Word file.
